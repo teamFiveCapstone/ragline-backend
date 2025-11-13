@@ -23,10 +23,8 @@ export class AppRepository {
   }
 
   async createDocument(
-    documentData: Omit<DocumentData, 'documentId' | 'status'>
+    documentData: Omit<DocumentData, 'documentId' | 'status'>, documentId: string
   ): Promise<string> {
-    const documentId = crypto.randomUUID();
-
     const command = new PutCommand({
       TableName: this.tableName,
       Item: {

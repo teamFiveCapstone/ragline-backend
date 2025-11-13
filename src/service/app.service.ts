@@ -10,12 +10,13 @@ export class AppService {
   }
 
   async createDocument(
-    documentData: Omit<DocumentData, 'documentId' | 'status'>
+    documentData: Omit<DocumentData, 'documentId' | 'status'>,
+    documentId: string
   ) {
     console.log(`Creating document record: ${documentData.fileName}`);
 
-    const documentId = await this.appRepository.createDocument(documentData);
-    return documentId;
+    const result = await this.appRepository.createDocument(documentData, documentId);
+    return result;
   }
 
   async fetchDocument(documentId: string): Promise<DocumentData> {

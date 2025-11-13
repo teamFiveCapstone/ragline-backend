@@ -10,6 +10,7 @@ import express from 'express';
 import multer from 'multer';
 import multerS3 from 'multer-s3';
 import { S3Client } from '@aws-sdk/client-s3';
+import { randomUUID } from 'crypto';
 const app = express();
 
 // Parse JSON request bodies
@@ -23,8 +24,11 @@ const upload = multer({
     s3: s3Client,
     bucket: S3_BUCKET_NAME,
     key: (req, file, cb) => {
-      // Use original filename as S3 key
-      cb(null, file.originalname);
+      // Use documentId from req and preserve file extension
+      const documentId = (req as any).documentId;
+      const extension = file.originalname.split('.').pop();
+      const keyWithExtension = extension ? `${documentId}.${extension}` : documentId;
+      cb(null, keyWithExtension);
     },
     contentType: multerS3.AUTO_CONTENT_TYPE,
   }),
@@ -55,28 +59,39 @@ app.get('/api/documents/:id', async (req, res) => {
   }
 });
 
-app.post('/api/documents', upload.single('file'), async (req, res) => {
-  try {
-    const file = req.file;
+app.post('/api/documents',
+  // First: Generate documentId and attach to req
+  (req, res, next) => {
+    (req as any).documentId = randomUUID();
+    next();
+  },
+  // Second: Upload with custom key using documentId
+  upload.single('file'),
+  // Third: Route handler
+  async (req, res) => {
+    try {
+      const file = req.file;
+      const documentId = (req as any).documentId; // Use the pre-generated ID
 
-    if (!file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      await appService.createDocument({
+        fileName: file.originalname,
+        size: file.size,
+        mimetype: file.mimetype,
+      }, documentId);
+
+      const result = await appService.fetchDocument(documentId);
+
+      res.json(result);
+    } catch (error) {
+      console.error('Upload error:', error);
+      res.status(500).json({ error: 'Upload failed' });
     }
-
-    const documentId = await appService.createDocument({
-      fileName: file.originalname,
-      size: file.size,
-      mimetype: file.mimetype,
-    });
-
-    const result = await appService.fetchDocument(documentId);
-
-    res.json(result);
-  } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ error: 'Upload failed' });
   }
-});
+);
 
 app.patch('/api/documents/:id', async (req, res) => {
   const documentId = req.params.id;
