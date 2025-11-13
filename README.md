@@ -34,8 +34,8 @@ Add a GSI for querying by status
       Projection={ProjectionType=ALL}
 ```
 
-## How to Run
+## How to Run Locally
 
 1. `cp .env.example .env` (and edit if necessary)
 1. `npm ci`
-1. `npm run start`
+1. `npm run dev`
