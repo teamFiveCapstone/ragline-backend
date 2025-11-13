@@ -10,6 +10,21 @@
 
 - TBD
 
+## Dynamodb table
+
+This command creates our table
+
+```
+aws dynamodb create-table \
+  --table-name documents \
+  --attribute-definitions \
+      AttributeName=documentId,AttributeType=S \
+      AttributeName=status,AttributeType=S \
+  --key-schema AttributeName=documentId,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --table-class STANDARD
+```
+
 ## How to Run
 
 1. `cp .env.example .env` (and edit if necessary)

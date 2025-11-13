@@ -1,12 +1,11 @@
 import {
   AWS_REGION,
-  DB_NAME,
-  MONGODB_CONNECTION_STRING,
   PORT,
   S3_BUCKET_NAME,
+  DYNAMODB_TABLE_NAME,
 } from './config/config';
 import { AppRepository } from './repository/app.repository';
-// import { AppService } from './service/app.service';
+import { AppService } from './service/app.service';
 import express from 'express';
 import multer from 'multer';
 import multerS3 from 'multer-s3';
@@ -31,36 +30,24 @@ const upload = multer({
 
 // TODO: Set up real logger (Winston or Pino)
 
-// const appRepository = new AppRepository(MONGODB_CONNECTION_STRING, DB_NAME);
-// const appService = new AppService(appRepository);
-
-// app.get('/v1/api/bucketconfig/:id', async (req, res) => {
-//   const bucketName = req.params.id;
-//   const result = await appService.getConfigForBucket(bucketName);
-
-//   if (!result) {
-//     res.status(404).send('Resource not found');
-//   }
-
-//   res.json(result);
-// });
+const appRepository = new AppRepository(AWS_REGION, DYNAMODB_TABLE_NAME);
+const appService = new AppService(appRepository);
 
 app.post('/api/documents', upload.single('file'), async (req, res) => {
   try {
-    const file = req.file as any;
+    const file = req.file;
 
     if (!file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // File is already uploaded to S3 by multer-s3
-    // req.file contains S3 metadata instead of buffer
-    const result = {
-      key: file.key,
-      location: file.location,
-      etag: file.etag,
+    const documentId = await appService.createDocument({
+      fileName: file.originalname,
       size: file.size,
-    };
+      mimetype: file.mimetype,
+    });
+
+    const result = await appService.fetchDocument(documentId);
 
     res.json(result);
   } catch (error) {
@@ -70,6 +57,6 @@ app.post('/api/documents', upload.single('file'), async (req, res) => {
 });
 
 app.listen(PORT, async () => {
-  // await appRepository.connect();
+  await appRepository.connect();
   console.log('Listening to port 3000.');
 });

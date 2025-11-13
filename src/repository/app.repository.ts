@@ -1,27 +1,65 @@
-import { Db, MongoClient } from 'mongodb';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+} from '@aws-sdk/lib-dynamodb';
+import { DocumentData, DocumentStatus } from '../service/types';
 
 export class AppRepository {
-  private client: MongoClient;
-  private db: Db;
+  private client: DynamoDBClient;
+  private docClient: DynamoDBDocumentClient;
+  private tableName: string;
 
-  constructor(connection_string: string, db_name: string) {
-    this.client = new MongoClient(connection_string);
-    this.db = this.client.db(db_name);
+  constructor(region: string, tableName: string) {
+    this.client = new DynamoDBClient({ region });
+    this.docClient = DynamoDBDocumentClient.from(this.client);
+    this.tableName = tableName;
   }
 
   async connect() {
-    await this.client.connect();
-
-    console.log('Successfully connected to MongoDB Cloud!');
+    console.log('DynamoDB client initialized successfully!');
   }
 
-  async getBucketConfig(folderPath: string) {
-    const configsCollection = this.db.collection('configs');
+  async createDocument(
+    documentData: Omit<DocumentData, 'documentId' | 'status'>
+  ): Promise<string> {
+    const documentId = crypto.randomUUID();
 
-    const config = await configsCollection.findOne({
-      folder_path: folderPath,
+    const command = new PutCommand({
+      TableName: this.tableName,
+      Item: {
+        documentId,
+        status: DocumentStatus.PENDING,
+        fileName: documentData.fileName,
+        createdAt: new Date().toISOString(),
+        size: documentData.size,
+        mimetype: documentData.mimetype,
+      },
     });
 
-    return config;
+    const result = await this.docClient.send(command);
+    if (result.$metadata.httpStatusCode !== 200) {
+      throw new Error('failed to write document to dynamodb');
+    }
+
+    return documentId;
+  }
+
+  async fetchDocument(docuemntId: string): Promise<DocumentData> {
+    const command = new GetCommand({
+      TableName: this.tableName,
+      Key: {
+        documentId: docuemntId,
+      },
+    });
+
+    const response = await this.docClient.send(command);
+    
+    if (response.$metadata.httpStatusCode !== 200) {
+      throw new Error(`failed to fetch document: ${docuemntId}`)
+    }
+
+    return response.Item as DocumentData;
   }
 }

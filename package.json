@@ -5,17 +5,17 @@
     "start": "npm run build && node dist/main.js"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.930.0",
     "@aws-sdk/client-s3": "^3.929.0",
+    "@aws-sdk/lib-dynamodb": "^3.930.0",
     "@types/multer-s3": "^3.0.3",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "mongodb": "^6.0.0",
     "multer": "^2.0.2",
     "multer-s3": "^3.0.1"
   },
   "devDependencies": {
     "@types/express": "^4.17.0",
-    "@types/mongodb": "^4.0.6",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
   }
