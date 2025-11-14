@@ -40,7 +40,10 @@ const upload = multer({
 const appRepository = new AppRepository(AWS_REGION, DYNAMODB_TABLE_NAME);
 const appService = new AppService(appRepository);
 
-//TODO: not implemented
+app.get('/health', (req, res) => {
+  res.status(200);
+});
+
 app.get('/api/documents', async (req, res) => {
   const PAGE_NUMBER = 1;
   const LIMIT = 10;

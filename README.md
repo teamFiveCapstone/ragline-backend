@@ -39,3 +39,14 @@ Add a GSI for querying by status
 1. `cp .env.example .env` (and edit if necessary)
 1. `npm ci`
 1. `npm run dev`
+
+## How to build container and push to ECR
+
+```
+$ docker build -t ragline-backend:latest
+$ docker tag \
+      ragline-backend:latest \
+      908860991626.dkr.ecr.us-east-1.amazonaws.com/ragline-backend:latest
+$ docker push 908860991626.dkr.ecr.us-east-1.amazonaws.com/ragline-backend:latest
+```
+
