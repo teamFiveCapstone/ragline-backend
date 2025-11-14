@@ -41,7 +41,7 @@ const appRepository = new AppRepository(AWS_REGION, DYNAMODB_TABLE_NAME);
 const appService = new AppService(appRepository);
 
 app.get('/health', (req, res) => {
-  res.status(200);
+  res.status(200).send;
 });
 
 app.get('/api/documents', async (req, res) => {

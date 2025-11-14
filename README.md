@@ -43,7 +43,7 @@ Add a GSI for querying by status
 ## How to build container and push to ECR
 
 ```
-$ docker build -t ragline-backend:latest
+$ docker build -t ragline-backend:latest .
 $ docker tag \
       ragline-backend:latest \
       908860991626.dkr.ecr.us-east-1.amazonaws.com/ragline-backend:latest
