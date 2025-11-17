@@ -3,6 +3,7 @@ import {
   PORT,
   S3_BUCKET_NAME,
   DYNAMODB_TABLE_NAME,
+  DYNAMODB_TABLE_USERS,
 } from './config/config';
 import { AppRepository } from './repository/app.repository';
 import { AppService } from './service/app.service';
@@ -37,11 +38,40 @@ const upload = multer({
 
 // TODO: Set up real logger (Winston or Pino)
 
-const appRepository = new AppRepository(AWS_REGION, DYNAMODB_TABLE_NAME);
+const appRepository = new AppRepository(
+  AWS_REGION,
+  DYNAMODB_TABLE_NAME,
+  DYNAMODB_TABLE_USERS
+);
 const appService = new AppService(appRepository);
 
 app.get('/health', (req, res) => {
   res.status(200).send('ok');
+});
+
+app.post('/login', async (req, res) => {
+  // const users = await db
+  //   .select()
+  //   .from(usersTable)
+  //   .where(eq(usersTable.name, req.body.userName));
+  // const passwordHash = users[0]?.password;
+  // const authenticated = await bcrypt.compare(req.body.password, passwordHash);
+  // if (!authenticated) {
+  //   res.status(401).send();
+  //   return;
+  // }
+  // const jwtSecret = process.env.JWT_SECRET;
+  // if (!jwtSecret) {
+  //   throw new Error('no jwt secret');
+  // }
+  // const token = jwt.sign(
+  //   {
+  //     userName: 'admin',
+  //   },
+  //   jwtSecret,
+  //   { expiresIn: '1h' }
+  // );
+  // res.json({ jwt: token });
 });
 
 app.get('/api/documents', async (req, res) => {
@@ -135,5 +165,6 @@ app.patch('/api/documents/:id', async (req, res) => {
 
 app.listen(PORT, async () => {
   await appRepository.connect();
+  await appService.createAdminUser();
   console.log('Listening to port 3000.');
 });

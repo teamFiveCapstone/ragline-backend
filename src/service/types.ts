@@ -12,3 +12,8 @@ export interface DocumentData {
   status: DocumentStatus;
   mimetype: string;
 }
+
+export interface UsersData {
+  userName: string;
+  hashedPassword: string;
+}

@@ -1,6 +1,7 @@
 import { PutCommandOutput } from '@aws-sdk/lib-dynamodb';
 import { AppRepository } from '../repository/app.repository';
 import { DocumentData } from './types';
+import bcrypt from 'bcrypt';
 
 export class AppService {
   private appRepository: AppRepository;
@@ -29,7 +30,11 @@ export class AppService {
   }
 
   async fetchAllDocuments(page: number, limit: number, status: string) {
-    const documents = await this.appRepository.fetchAllDocuments(page, limit, status);
+    const documents = await this.appRepository.fetchAllDocuments(
+      page,
+      limit,
+      status
+    );
     return documents;
   }
 
@@ -41,5 +46,22 @@ export class AppService {
     );
 
     return document;
+  }
+
+  async createAdminUser() {
+    try {
+      const user = await this.appRepository.getAdminUser();
+
+      if (user) {
+        return;
+      }
+      const hashedPassword = await bcrypt.hash(
+        process.env.ADMIN_PASSWORD || 'password',
+        3
+      );
+      await this.appRepository.createAdminUser(hashedPassword);
+    } catch (error) {
+      console.error('Failed to create admin user:', error);
+    }
   }
 }

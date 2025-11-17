@@ -7,17 +7,19 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { DocumentData, DocumentStatus } from '../service/types';
+import { DocumentData, DocumentStatus, UsersData } from '../service/types';
 
 export class AppRepository {
   private client: DynamoDBClient;
   private docClient: DynamoDBDocumentClient;
-  private tableName: string;
+  private documentsTable: string;
+  private usersTable: string;
 
-  constructor(region: string, tableName: string) {
+  constructor(region: string, documentsTable: string, usersTable: string) {
     this.client = new DynamoDBClient({ region });
     this.docClient = DynamoDBDocumentClient.from(this.client);
-    this.tableName = tableName;
+    this.documentsTable = documentsTable;
+    this.usersTable = usersTable;
   }
 
   async connect() {
@@ -29,7 +31,7 @@ export class AppRepository {
     documentId: string
   ): Promise<string> {
     const command = new PutCommand({
-      TableName: this.tableName,
+      TableName: this.documentsTable,
       Item: {
         documentId,
         status: DocumentStatus.PENDING,
@@ -50,7 +52,7 @@ export class AppRepository {
 
   async fetchDocument(documentId: string): Promise<DocumentData> {
     const command = new GetCommand({
-      TableName: this.tableName,
+      TableName: this.documentsTable,
       Key: {
         documentId: documentId,
       },
@@ -67,7 +69,7 @@ export class AppRepository {
 
   async updateDocument(documentId: string, requestBody: { status: string }) {
     const command = new UpdateCommand({
-      TableName: this.tableName,
+      TableName: this.documentsTable,
       Key: {
         documentId: documentId,
       },
@@ -106,7 +108,7 @@ export class AppRepository {
     try {
       if (status === 'all') {
         const command = new ScanCommand({
-          TableName: this.tableName,
+          TableName: this.documentsTable,
         });
 
         const response = await this.docClient.send(command);
@@ -119,7 +121,7 @@ export class AppRepository {
       }
 
       const command = new QueryCommand({
-        TableName: this.tableName,
+        TableName: this.documentsTable,
         IndexName: 'status-index',
         KeyConditionExpression: '#status = :status',
         ExpressionAttributeNames: {
@@ -141,5 +143,36 @@ export class AppRepository {
       console.error('Error fetching documents:', error);
       throw new Error('Failed to fetch documents from database');
     }
+  }
+
+  async createAdminUser(hashedPassword: string): Promise<void> {
+    const command = new PutCommand({
+      TableName: this.usersTable,
+      Item: {
+        userName: 'admin',
+        password: hashedPassword,
+      },
+    });
+
+    const result = await this.docClient.send(command);
+    if (result.$metadata.httpStatusCode !== 200) {
+      throw new Error('failed to created admin on dynamodb');
+    }
+  }
+  async getAdminUser(): Promise<UsersData> {
+    const command = new GetCommand({
+      TableName: this.usersTable,
+      Key: {
+        userName: 'admin',
+      },
+    });
+
+    const response = await this.docClient.send(command);
+
+    if (response.$metadata.httpStatusCode !== 200) {
+      throw new Error(`Failed to fetch user: ${command}`);
+    }
+
+    return response.Item as UsersData;
   }
 }

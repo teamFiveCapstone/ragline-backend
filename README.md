@@ -25,6 +25,8 @@ aws dynamodb create-table \
   --table-class STANDARD
 ```
 
+_get command to create user table_
+
 Add a GSI for querying by status
 
 ```

@@ -10,13 +10,17 @@
     "@aws-sdk/client-s3": "^3.929.0",
     "@aws-sdk/lib-dynamodb": "^3.930.0",
     "@types/multer-s3": "^3.0.3",
+    "bcrypt": "^6.0.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "multer-s3": "^3.0.1"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/express": "^4.17.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "nodemon": "^3.1.11",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
