@@ -48,9 +48,13 @@ export class AppService {
     return document;
   }
 
+  async fetchAdminUser() {
+    return await this.appRepository.getAdminUser();
+  }
+
   async createAdminUser() {
     try {
-      const user = await this.appRepository.getAdminUser();
+      const user = await this.fetchAdminUser();
 
       if (user) {
         return;

@@ -10,3 +10,4 @@ export const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME ?? '';
 export const DYNAMODB_TABLE_NAME = process.env.DYNAMODB_TABLE_NAME ?? '';
 export const DYNAMODB_TABLE_USERS = process.env.DYNAMODB_TABLE_USERS ?? '';
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? '';
+export const JWT_SECRET = process.env.JWT_SECRET ?? '';

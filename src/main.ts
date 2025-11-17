@@ -12,9 +12,15 @@ import multer from 'multer';
 import multerS3 from 'multer-s3';
 import { S3Client } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { authenticateMiddleware } from './middleware/authentication-middleware';
+
 const app = express();
 
 app.use(express.json());
+app.use(authenticateMiddleware);
+app.use(express.urlencoded({ extended: true }));
 
 const s3Client = new S3Client({ region: AWS_REGION });
 
@@ -49,29 +55,28 @@ app.get('/health', (req, res) => {
   res.status(200).send('ok');
 });
 
-app.post('/login', async (req, res) => {
-  // const users = await db
-  //   .select()
-  //   .from(usersTable)
-  //   .where(eq(usersTable.name, req.body.userName));
-  // const passwordHash = users[0]?.password;
-  // const authenticated = await bcrypt.compare(req.body.password, passwordHash);
-  // if (!authenticated) {
-  //   res.status(401).send();
-  //   return;
-  // }
-  // const jwtSecret = process.env.JWT_SECRET;
-  // if (!jwtSecret) {
-  //   throw new Error('no jwt secret');
-  // }
-  // const token = jwt.sign(
-  //   {
-  //     userName: 'admin',
-  //   },
-  //   jwtSecret,
-  //   { expiresIn: '1h' }
-  // );
-  // res.json({ jwt: token });
+app.post('/api/login', async (req, res) => {
+  const user = await appService.fetchAdminUser();
+  const passwordHash = user['password'];
+
+  const authenticated = await bcrypt.compare(req.body.password, passwordHash);
+
+  if (!authenticated) {
+    res.status(403).send();
+    return;
+  }
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error('no jwt secret');
+  }
+  const token = jwt.sign(
+    {
+      userName: 'admin',
+    },
+    jwtSecret,
+    { expiresIn: '1h' }
+  );
+  res.json({ jwt: token });
 });
 
 app.get('/api/documents', async (req, res) => {

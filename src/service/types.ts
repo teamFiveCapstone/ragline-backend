@@ -15,5 +15,5 @@ export interface DocumentData {
 
 export interface UsersData {
   userName: string;
-  hashedPassword: string;
+  password: string;
 }
