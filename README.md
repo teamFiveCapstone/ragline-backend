@@ -42,8 +42,6 @@ Add a GSI for querying by status
 
 ## How to build container and push to ECR
 
-
 1. docker build -t ragline-backend .
 1. docker tag ragline-backend:latest 908860991626.dkr.ecr.us-east-1.amazonaws.com/ragline-backend:latest
 1. docker push 908860991626.dkr.ecr.us-east-1.amazonaws.com/ragline-backend:latest
-

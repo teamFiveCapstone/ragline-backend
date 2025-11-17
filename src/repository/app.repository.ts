@@ -118,9 +118,10 @@ export class AppRepository {
         return (response.Items as DocumentData[]) || [];
       }
 
-      const command = new ScanCommand({
+      const command = new QueryCommand({
         TableName: this.tableName,
-        FilterExpression: '#status = :status',
+        IndexName: 'status-index',
+        KeyConditionExpression: '#status = :status',
         ExpressionAttributeNames: {
           '#status': 'status',
         },
