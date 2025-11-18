@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { JWT_SECRET } from '../config/config';
+import { JWT_SECRET, INGESTION_API_TOKEN } from '../config/config';
 
 export const authenticateMiddleware = (
   req: Request,
@@ -10,6 +10,11 @@ export const authenticateMiddleware = (
   const publicRoutes = ['/api/login', '/health'];
 
   if (publicRoutes.includes(req.path)) {
+    return next();
+  }
+
+  const apiToken = req.headers['x-api-token'];
+  if (INGESTION_API_TOKEN === apiToken) {
     return next();
   }
 
@@ -30,7 +35,6 @@ export const authenticateMiddleware = (
     const decoded = jwt.verify(token, jwtSecret);
     // check if the user exists?
   } catch (error) {
-    // if it doesn't send 403
     return res.status(403).send();
   }
 
