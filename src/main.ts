@@ -57,6 +57,8 @@ app.post('/api/login', async (req, res) => {
   try {
     const { userName, password } = req.body;
 
+    console.log(`userName from request: ${userName} password from request ${password}`)
+
     if (!userName || !password) {
       return res
         .status(400)

@@ -65,6 +65,8 @@ export class AppService {
         process.env.ADMIN_PASSWORD || 'password',
         3
       );
+
+      console.log(`hashed password from createAdminUser: ${hashedPassword}`);
       await this.appRepository.createAdminUser(hashedPassword);
     } catch (error) {
       console.error('Failed to create admin user:', error);
@@ -76,7 +78,12 @@ export class AppService {
     passwordHash: string
   ): Promise<boolean> {
     try {
-      return await bcrypt.compare(password, passwordHash);
+      console.log(
+        `authenticating user... password ${password} passwordHash: ${passwordHash}`
+      );
+      const result = await bcrypt.compare(password, passwordHash);
+      console.log(`result from bcrypt compare: ${result}`);
+      return result;
     } catch (error) {
       // If bcrypt.compare throws (e.g., malformed hash), treat as authentication failure
       console.error('Error during password comparison:', error);
@@ -89,15 +96,25 @@ export class AppService {
       const user = await this.fetchAdminUser();
 
       if (!user) {
+        console.log(`user not found in dynamodb: ${user}`);
         return null;
       }
 
       const username = user.userName;
       const passwordHash = user.password;
 
+      console.log(`Retrieved hashedUserPassword ${passwordHash}`);
+
       if (username !== userName) {
+        console.log(
+          `usernames don't match: provided ${userName} from dynamodb: ${username}`
+        );
         return null;
       }
+
+      console.log(
+        `username DO match: provided ${userName} from dynamodb: ${username}`
+      );
 
       const authenticated = await this.authenticateUser(password, passwordHash);
       if (!authenticated) {

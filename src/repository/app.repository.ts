@@ -170,9 +170,11 @@ export class AppRepository {
     const response = await this.docClient.send(command);
 
     if (response.$metadata.httpStatusCode !== 200) {
+      console.log(`error getting admin user from dynamodb`)
       throw new Error(`Failed to fetch user: ${command}`);
     }
 
+    console.log(`dynamodb response from getAdmin user ${JSON.stringify(response.Item)}`)
     return response.Item as UsersData;
   }
 }

@@ -9,7 +9,10 @@ export const authenticateMiddleware = (
 ) => {
   const publicRoutes = ['/api/login', '/health'];
 
+  console.log(`request path from line 12: ${req.path}`);
+
   if (publicRoutes.includes(req.path)) {
+    console.log(`request path from line 15: ${req.path}`);
     return next();
   }
 

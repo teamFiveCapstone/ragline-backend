@@ -223,9 +223,7 @@ file: <file>
 **cURL Example:**
 
 ```bash
-curl -X POST http://localhost:3000/api/documents \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
-  -F "file=@/path/to/your/file.pdf"
+c
 ```
 
 **Success Response (201):**
