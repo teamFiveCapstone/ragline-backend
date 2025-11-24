@@ -39,7 +39,9 @@ export const authenticateMiddleware = (
     const decoded = jwt.verify(token, jwtSecret, (err, decoded) => {
       if (err) {
         if (err.name === 'TokenExpiredError') {
-          return res.status(403).send('Please log again. JWT expired.');
+          return res
+            .status(403)
+            .json({ error: 'Token expired, please sign in again.' });
         }
       }
     });
