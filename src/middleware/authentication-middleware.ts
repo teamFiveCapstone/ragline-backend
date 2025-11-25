@@ -13,44 +13,48 @@ export const authenticateMiddleware = (
     return next();
   }
 
-  const apiToken = req.headers['x-api-token'];
-  if (INGESTION_API_TOKEN === apiToken) {
+  const apiToken = req.headers['x-api-token'] as string;
+  if (apiToken && INGESTION_API_TOKEN === apiToken) {
     console.log('request successfully authenticated via api token');
     return next();
   }
 
-  const authHeader = req.headers['authorization'];
+  const authHeader = req.headers['authorization'] as string;
+  const queryToken = req.query.token as string;
 
-  if (!authHeader) {
-    console.log(
-      'invalid x-api-token or missing auth header, rejecting request'
-    );
-    return res.status(403).send();
+  let jwtToken: string | null = null;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    jwtToken = authHeader.split(' ')[1];
+  } else if (queryToken) {
+    jwtToken = queryToken;
   }
 
-  const token = authHeader.split(' ')[1];
+  if (!jwtToken) {
+    console.log('authentication failed: no valid x-api-token, auth header, or query param token provided');
+    return res.status(403).json({ error: 'Authentication required' });
+  }
 
   const jwtSecret = JWT_SECRET;
   if (!jwtSecret) {
-    throw new Error('no jwt secret');
+    console.error('JWT_SECRET not configured');
+    return res.status(500).json({ error: 'Server configuration error' });
   }
 
   try {
-    const decoded = jwt.verify(token, jwtSecret, (err, decoded) => {
-      if (err) {
-        if (err.name === 'TokenExpiredError') {
-          return res
-            .status(403)
-            .json({ error: 'Token expired, please sign in again.' });
-        }
-      }
-    });
-    // check if the user exists?
+    jwt.verify(jwtToken, jwtSecret);
+    console.log('request successfully authenticated via jwt');
+    return next();
   } catch (error) {
-    console.log('invalid jwt supplied in auth header, rejecting request');
-    return res.status(403).send();
+    if (error instanceof jwt.TokenExpiredError) {
+      console.log('jwt authentication failed: token expired');
+      return res.status(403).json({ error: 'Token expired, please sign in again.' });
+    } else if (error instanceof jwt.JsonWebTokenError) {
+      console.log('jwt authentication failed: invalid token');
+      return res.status(403).json({ error: 'Invalid token' });
+    } else {
+      console.log('jwt authentication failed: unknown error', error);
+      return res.status(403).json({ error: 'Authentication failed' });
+    }
   }
-
-  console.log('request successfully authentciated via jwt');
-  next();
 };

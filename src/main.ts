@@ -31,11 +31,10 @@ function broadcastDocumentUpdate(document: DocumentData) {
 }
 
 const app = express();
-
+app.use(authenticateMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-//ZACH ADDED SSE endpoint with no Auth
 app.get('/api/events', (req, res) => {
   console.log('SSE client connected');
 
@@ -59,10 +58,6 @@ app.get('/api/events', (req, res) => {
     if (index !== -1) sseClients.splice(index, 1);
   });
 });
-
-//!!!!!!END OF ZACH ADDED HERE!!!!!!
-
-app.use(authenticateMiddleware);
 
 const s3Client = new S3Client({ region: AWS_REGION });
 
