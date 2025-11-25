@@ -14,11 +14,45 @@ import { S3Client } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import { authenticateMiddleware } from './middleware/authentication-middleware';
 
+//!!!!!!!ZACH Added this for SSE!!!!!!!!!!
+import type { DocumentData } from './service/types';
+
+//This array will keep track of open SSE connections
+const sseClients: express.Response[] = [];
+
+//Function that will send the events
+function broadcastDocumentUpdate(document: DocumentData) {
+  const data = `data: ${JSON.stringify(document)}\n\n`;
+  sseClients.forEach((res) => res.write(data));
+}
+
+//!!!!!!END OF ZACH ADDED HERE!!!!!!
+
 const app = express();
 
 app.use(express.json());
-app.use(authenticateMiddleware);
 app.use(express.urlencoded({ extended: true }));
+
+//!!!!!!!ZACH Added this for SSE!!!!!!!!!!
+
+app.get('/api/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  res.write(': connected\n\n');
+
+  sseClients.push(res);
+
+  req.on('close', () => {
+    const index = sseClients.indexOf(res);
+    if (index !== -1) sseClients.splice(index, 1);
+  });
+});
+
+//!!!!!!END OF ZACH ADDED HERE!!!!!!
+
+app.use(authenticateMiddleware);
 
 const s3Client = new S3Client({ region: AWS_REGION });
 
@@ -155,6 +189,13 @@ app.patch('/api/documents/:id', async (req, res) => {
 
   try {
     const result = await appService.updateDocument(documentId, requestBody);
+
+    //!!!!!!!ZACH Added this for SSE!!!!!!!!!!
+
+    broadcastDocumentUpdate(result);
+
+    //!!!!!!END OF ZACH ADDED HERE!!!!!!
+
     res.json(result);
   } catch (error) {
     const errorMessage =
