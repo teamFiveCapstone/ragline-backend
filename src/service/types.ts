@@ -11,6 +11,7 @@ export interface DocumentData {
   size: number;
   status: DocumentStatus;
   mimetype: string;
+  createdAt?: string;
 }
 
 export interface UsersData {

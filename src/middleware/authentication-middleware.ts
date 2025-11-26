@@ -7,6 +7,7 @@ export const authenticateMiddleware = (
   res: Response,
   next: NextFunction
 ) => {
+  console.log('middleware is running', 'path:', req.path);
   const publicRoutes = ['/api/login', '/health'];
 
   if (publicRoutes.includes(req.path)) {
