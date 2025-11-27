@@ -3,6 +3,9 @@ export enum DocumentStatus {
   RUNNING = 'running',
   FINISHED = 'finished',
   FAILED = 'failed',
+  DELETING = 'deleting',
+  DELETED = 'deleted',
+  DELETE_FAILED = 'delete_failed',
 }
 
 export interface DocumentData {
