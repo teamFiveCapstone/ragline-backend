@@ -6,6 +6,7 @@ import {
   QueryCommand,
   ScanCommand,
   UpdateCommand,
+  DeleteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { DocumentData, DocumentStatus, UsersData } from '../service/types';
 
@@ -91,6 +92,18 @@ export class AppRepository {
     }
 
     return response.Attributes as DocumentData;
+  }
+
+  async deleteDocument(documentId: string): Promise<void> {
+    const command = new DeleteCommand({
+      TableName: this.documentsTable,
+      Key: { documentId },
+    });
+
+    const response = await this.docClient.send(command);
+    if (response.$metadata.httpStatusCode !== 200) {
+      throw new Error(`Failed to delete: ${documentId}`);
+    }
   }
 
   async fetchDocumentsByStatus(status: string): Promise<DocumentData[]> {

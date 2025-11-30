@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 export class S3Repository {
   private client: S3Client;
@@ -50,5 +50,15 @@ export class S3Repository {
       location: `https://${this.bucketName}.s3.amazonaws.com/${key}`,
       etag: result.ETag,
     };
+  }
+
+  async deleteDocument(key: string) {
+    const command = new DeleteObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+    });
+
+    const result = await this.client.send(command);
+    return { key, deleted: true, versionId: result.VersionId };
   }
 }

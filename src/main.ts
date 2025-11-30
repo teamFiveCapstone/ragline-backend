@@ -6,6 +6,7 @@ import {
   DYNAMODB_TABLE_USERS,
 } from './config/config';
 import { AppRepository } from './repository/app.repository';
+import { S3Repository } from './repository/s3.repository';
 import { AppService } from './service/app.service';
 import express from 'express';
 import multer from 'multer';
@@ -16,9 +17,13 @@ import { authenticateMiddleware } from './middleware/authentication-middleware';
 
 //ZACH Added Type import for SSE
 import type { DocumentData } from './service/types';
+import { DocumentStatus } from './service/types';
 
 //ZACH ADDED Active SSE connections
 const sseClients: express.Response[] = [];
+
+// Cleanup job interval (starts on DELETE, stops when idle)
+let cleanupInterval: NodeJS.Timeout | null = null;
 
 //ZACH ADDED Function used to push updated document data to all connected clients
 function broadcastDocumentUpdate(document: DocumentData) {
@@ -210,6 +215,84 @@ app.patch('/api/documents/:id', async (req, res) => {
     res.status(500).json({ error: errorMessage });
   }
 });
+
+app.delete('/api/documents/:id', async (req, res) => {
+  const documentId = req.params.id;
+
+  try {
+    const document = await appService.fetchDocument(documentId);
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Reject if still processing
+    if (document.status === DocumentStatus.RUNNING) {
+      return res.status(409).json({
+        error: 'Cannot delete while processing. Wait for completion.'
+      });
+    }
+
+    // Delete S3 (triggers EventBridge → ingestion deletes embeddings)
+    const s3Repo = new S3Repository(AWS_REGION, S3_BUCKET_NAME);
+    await s3Repo.connect();
+    const extension = document.fileName.split('.').pop();
+    const s3Key = extension ? `${documentId}.${extension}` : documentId;
+    await s3Repo.deleteDocument(s3Key);
+
+    // Set status to deleting
+    const updatedDoc = await appService.updateDocument(documentId, { status: DocumentStatus.DELETING });
+
+    broadcastDocumentUpdate(updatedDoc);
+
+    // Start cleanup job if not already running
+    if (!cleanupInterval) {
+      cleanupInterval = setInterval(cleanupDeletedDocuments, 10000); // 10s
+      console.log('[Cleanup] Started (10s interval)');
+    }
+
+    res.status(202).json({
+      message: 'Delete initiated',
+      documentId,
+      status: DocumentStatus.DELETING
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Delete error:', msg);
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Cleanup job: finalize deletion of status='deleted' documents
+async function cleanupDeletedDocuments() {
+  console.log('[Cleanup] Checking for documents to finalize...');
+  try {
+    const deleted = await appService.fetchAllDocuments(DocumentStatus.DELETED);
+    const deleting = await appService.fetchAllDocuments(DocumentStatus.DELETING);
+
+    console.log(`[Cleanup] Found ${deleted.items.length} deleted, ${deleting.items.length} deleting`);
+
+    // Finalize 'deleted' documents (remove from DynamoDB)
+    for (const doc of deleted.items) {
+      try {
+        await appService.finalizeDocumentDeletion(doc.documentId);
+        console.log(`[Cleanup] Finalized: ${doc.documentId}`);
+      } catch (error) {
+        console.error(`[Cleanup] Failed to finalize ${doc.documentId}:`, error);
+      }
+    }
+
+    // Stop interval if no pending deletes
+    if (deleted.items.length === 0 && deleting.items.length === 0) {
+      if (cleanupInterval) {
+        clearInterval(cleanupInterval);
+        cleanupInterval = null;
+        console.log('[Cleanup] No pending deletes, stopping interval');
+      }
+    }
+  } catch (error) {
+    console.error('[Cleanup] Error:', error);
+  }
+}
 
 app.listen(PORT, async () => {
   await appRepository.connect();
