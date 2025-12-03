@@ -4,6 +4,13 @@
     "dev:watch": "nodemon --exec ts-node src/main.ts",
     "build": "tsc",
     "start": "npm run build && node dist/main.js",
+    "test": "vitest",
+    "docker:up": "docker compose up -d dynamodb-local",
+    "docker:down": "docker compose down",
+    "docker:setup": "npm run docker:up && npm run setup-local-tables",
+    "setup-local-tables": "npm run setup-localdb-user && npm run setup-localdb-documents",
+    "setup-localdb-user": "aws dynamodb create-table --endpoint-url http://localhost:8000 --table-name users-terraform --attribute-definitions AttributeName=userName,AttributeType=S --key-schema AttributeName=userName,KeyType=HASH --billing-mode PAY_PER_REQUEST --table-class STANDARD --tags Key=Name,Value=dynamodb-table-2 Key=Environment,Value=production",
+    "setup-localdb-documents": "aws dynamodb create-table --endpoint-url http://localhost:8000 --table-name documents-terraform --attribute-definitions AttributeName=documentId,AttributeType=S AttributeName=status,AttributeType=S AttributeName=createdAt,AttributeType=S --key-schema AttributeName=documentId,KeyType=HASH --global-secondary-indexes 'IndexName=status-createdAt-index,KeySchema=[{AttributeName=status,KeyType=HASH},{AttributeName=createdAt,KeyType=RANGE}],Projection={ProjectionType=ALL},ProvisionedThroughput={ReadCapacityUnits=5,WriteCapacityUnits=5}' --billing-mode PAY_PER_REQUEST --table-class STANDARD --tags Key=Name,Value=dynamodb-table-3 Key=Environment,Value=production",
     "docker:build": "docker build -t ragline-backend .",
     "docker:tag": "docker tag ragline-backend 908860991626.dkr.ecr.us-east-1.amazonaws.com/ragline-backend:latest",
     "docker:push": "docker push 908860991626.dkr.ecr.us-east-1.amazonaws.com/ragline-backend:latest",
@@ -26,8 +33,12 @@
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^4.17.0",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/supertest": "^6.0.3",
+    "aws-sdk-mock": "^6.2.1",
     "nodemon": "^3.1.11",
+    "supertest": "^7.1.4",
     "ts-node": "^10.9.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.15"
   }
 }

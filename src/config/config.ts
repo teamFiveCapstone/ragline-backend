@@ -12,3 +12,4 @@ export const DYNAMODB_TABLE_USERS = process.env.DYNAMODB_TABLE_USERS ?? '';
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? '';
 export const JWT_SECRET = process.env.JWT_SECRET ?? '';
 export const INGESTION_API_TOKEN = process.env.INGESTION_API_TOKEN ?? '';
+export const IS_TEST_ENV = process.env.IS_TEST_ENV ?? '';

@@ -35,7 +35,7 @@ function broadcastDocumentUpdate(document: DocumentData) {
   sseClients.forEach((res) => res.write(data));
 }
 
-const app = express();
+export const app = express();
 app.use(authenticateMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -91,7 +91,7 @@ const appRepository = new AppRepository(
   DYNAMODB_TABLE_NAME,
   DYNAMODB_TABLE_USERS
 );
-const appService = new AppService(appRepository);
+export const appService = new AppService(appRepository);
 
 app.get('/health', (req, res) => {
   res.status(200).send('ok');
@@ -228,7 +228,7 @@ app.delete('/api/documents/:id', async (req, res) => {
     // Reject if still processing
     if (document.status === DocumentStatus.RUNNING) {
       return res.status(409).json({
-        error: 'Cannot delete while processing. Wait for completion.'
+        error: 'Cannot delete while processing. Wait for completion.',
       });
     }
 
@@ -240,7 +240,9 @@ app.delete('/api/documents/:id', async (req, res) => {
     await s3Repo.deleteDocument(s3Key);
 
     // Set status to deleting
-    const updatedDoc = await appService.updateDocument(documentId, { status: DocumentStatus.DELETING });
+    const updatedDoc = await appService.updateDocument(documentId, {
+      status: DocumentStatus.DELETING,
+    });
 
     broadcastDocumentUpdate(updatedDoc);
 
@@ -253,7 +255,7 @@ app.delete('/api/documents/:id', async (req, res) => {
     res.status(202).json({
       message: 'Delete initiated',
       documentId,
-      status: DocumentStatus.DELETING
+      status: DocumentStatus.DELETING,
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -267,9 +269,13 @@ async function cleanupDeletedDocuments() {
   console.log('[Cleanup] Checking for documents to finalize...');
   try {
     const deleted = await appService.fetchAllDocuments(DocumentStatus.DELETED);
-    const deleting = await appService.fetchAllDocuments(DocumentStatus.DELETING);
+    const deleting = await appService.fetchAllDocuments(
+      DocumentStatus.DELETING
+    );
 
-    console.log(`[Cleanup] Found ${deleted.items.length} deleted, ${deleting.items.length} deleting`);
+    console.log(
+      `[Cleanup] Found ${deleted.items.length} deleted, ${deleting.items.length} deleting`
+    );
 
     // Finalize 'deleted' documents (remove from DynamoDB)
     for (const doc of deleted.items) {

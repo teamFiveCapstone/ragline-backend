@@ -16,8 +16,8 @@ The API uses JWT (JSON Web Tokens) for authentication. Most endpoints require a 
 ### Authentication Flow
 
 1. **Login** to get a JWT token using `/api/login`
-2. **Include the token** in subsequent requests using the `Authorization` header: `Bearer <token>`
-3. **Token expires** after 1 hour
+1. **Include the token** in subsequent requests using the `Authorization` header: `Bearer <token>`
+1. **Token expires** after 1 hour
 
 ### Public Routes (No Authentication Required)
 
@@ -350,33 +350,84 @@ aws dynamodb create-table \
   --table-class STANDARD
 ```
 
-## Testing
-
-- TBD
-
 ## How to Run Locally
 
-1. Copy the environment file template:
+### For Production/AWS Environment
+
+1. **Copy the environment file template:**
 
    ```bash
    cp .env.example .env
    ```
 
-   Edit `.env` and add your configuration values.
+   Edit `.env` and configure for your AWS environment:
+   - Set your AWS credentials
+   - Set `IS_TEST_ENV=false` or remove it entirely
+   - Configure your production DynamoDB table names
+   - Set your production S3 bucket name
 
-2. Install dependencies:
+2. **Install dependencies:**
 
    ```bash
    npm ci
    ```
 
-3. Run the development server:
+3. **Run the development server:**
 
    ```bash
    npm run dev
    ```
 
-4. The server will start on `http://localhost:3000` (or the port specified in your `.env`)
+4. **The server will start on `http://localhost:3000`**
+
+The application will connect to your real AWS resources (DynamoDB, S3) as configured in your `.env` file.
+
+## Testing
+
+### Running Tests
+
+### Local Development/Testing Setup
+
+For local development and testing, use Docker to run DynamoDB Local:
+
+1. **Configure for local testing:**
+
+   Ensure your `.env` file has:
+   ```env
+   IS_TEST_ENV=true
+   DYNAMODB_TABLE_NAME=documents-terraform
+   DYNAMODB_TABLE_USERS=users-terraform
+   ```
+
+1. **Start local DynamoDB and create tables:**
+
+   ```bash
+   npm run docker:setup
+   ```
+
+   This command will:
+   - Pull the AWS DynamoDB Local Docker image
+   - Start DynamoDB on port 8000
+   - Create the required tables (`users-terraform` and `documents-terraform`)
+
+1. **Run your tests or development server:**
+
+   ```bash
+   npm test
+   ```
+
+### Docker Commands for Testing
+
+- **Start DynamoDB:** `npm run docker:up`
+- **Stop DynamoDB:** `npm run docker:down`
+- **Full setup:** `npm run docker:setup` (starts DB + creates tables)
+- **Create tables only:** `npm run setup-local-tables`
+
+### Troubleshooting Testing
+
+- **DynamoDB not starting?** Make sure Docker is running and port 8000 is available
+- **Tables not created?** Check your AWS credentials in `.env` - they're needed even for local DynamoDB
+- **Connection errors?** Ensure `IS_TEST_ENV=true` in your `.env` file for local testing
 
 ## How to Build Container and Push to ECR
 

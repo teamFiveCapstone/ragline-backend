@@ -9,6 +9,7 @@ import {
   DeleteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { DocumentData, DocumentStatus, UsersData } from '../service/types';
+import { IS_TEST_ENV } from '../config/config';
 
 export class AppRepository {
   private client: DynamoDBClient;
@@ -18,7 +19,16 @@ export class AppRepository {
   private readonly DEFAULT_LIMIT = 10;
 
   constructor(region: string, documentsTable: string, usersTable: string) {
-    this.client = new DynamoDBClient({ region });
+    if (IS_TEST_ENV) {
+      this.client = new DynamoDBClient({
+        region,
+        endpoint: 'http://localhost:8000',
+      });
+    } else {
+      this.client = new DynamoDBClient({
+        region,
+      });
+    }
     this.docClient = DynamoDBDocumentClient.from(this.client);
     this.documentsTable = documentsTable;
     this.usersTable = usersTable;
