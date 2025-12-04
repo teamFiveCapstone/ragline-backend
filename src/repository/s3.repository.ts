@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
+import logger from '../logger';
 
 export class S3Repository {
   private client: S3Client;
@@ -10,11 +15,23 @@ export class S3Repository {
   }
 
   async connect() {
-    console.log('S3 client initialized successfully!');
+    logger.info('S3 client initialized', {
+      bucketName: this.bucketName,
+    });
   }
 
-  async uploadDocument(fileName: string, fileBuffer: Buffer, contentType: string) {
+  async uploadDocument(
+    fileName: string,
+    fileBuffer: Buffer,
+    contentType: string
+  ) {
     const key = fileName;
+
+    logger.info('Uploading document to S3', {
+      bucketName: this.bucketName,
+      key,
+      contentType,
+    });
 
     const uploadParams = {
       Bucket: this.bucketName,
@@ -25,25 +42,21 @@ export class S3Repository {
 
     const result = await this.client.send(new PutObjectCommand(uploadParams));
 
-  //    {
-  //   // Unique identifier for the uploaded object
-  //   ETag: '"d41d8cd98f00b204e9800998ecf8427e"',
+    const statusCode = result.$metadata.httpStatusCode;
+    if (statusCode && (statusCode < 200 || statusCode >= 300)) {
+      logger.error('Failed to upload document to S3', {
+        bucketName: this.bucketName,
+        key,
+        statusCode,
+      });
+      throw new Error('Failed to upload document to S3');
+    }
 
-  //   // Server-side encryption info (if enabled)
-  //   ServerSideEncryption: 'AES256',
-
-  //   // Version ID if versioning is enabled on bucket
-  //   VersionId: 'null',
-
-  //   // Additional metadata
-  //   $metadata: {
-  //     httpStatusCode: 200,
-  //     requestId: 'ABC123DEF456',
-  //     extendedRequestId: 'xyz789...',
-  //     attempts: 1,
-  //     totalRetryDelay: 0
-  //   }
-  // }
+    logger.info('Uploaded document to S3 successfully', {
+      bucketName: this.bucketName,
+      key,
+      etag: result.ETag,
+    });
 
     return {
       key,
@@ -53,12 +66,34 @@ export class S3Repository {
   }
 
   async deleteDocument(key: string) {
+    logger.info('Deleting document from S3', {
+      bucketName: this.bucketName,
+      key,
+    });
+
     const command = new DeleteObjectCommand({
       Bucket: this.bucketName,
       Key: key,
     });
 
     const result = await this.client.send(command);
+
+    const statusCode = result.$metadata.httpStatusCode;
+    if (statusCode && (statusCode < 200 || statusCode >= 300)) {
+      logger.error('Failed to delete document from S3', {
+        bucketName: this.bucketName,
+        key,
+        statusCode,
+      });
+      throw new Error(`Failed to delete S3 object: ${key}`);
+    }
+
+    logger.info('Deleted document from S3 successfully', {
+      bucketName: this.bucketName,
+      key,
+      versionId: result.VersionId,
+    });
+
     return { key, deleted: true, versionId: result.VersionId };
   }
 }

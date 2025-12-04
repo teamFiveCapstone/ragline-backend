@@ -4,12 +4,12 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
-  ScanCommand,
   UpdateCommand,
   DeleteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { DocumentData, DocumentStatus, UsersData } from '../service/types';
 import { IS_TEST_ENV } from '../config/config';
+import logger from '../logger';
 
 export class AppRepository {
   private client: DynamoDBClient;
@@ -35,7 +35,11 @@ export class AppRepository {
   }
 
   async connect() {
-    console.log('DynamoDB client initialized successfully!');
+    logger.info('DynamoDB client initialized', {
+      documentsTable: this.documentsTable,
+      usersTable: this.usersTable,
+      isTestEnv: IS_TEST_ENV,
+    });
   }
 
   async createDocument(
@@ -56,6 +60,10 @@ export class AppRepository {
 
     const result = await this.docClient.send(command);
     if (result.$metadata.httpStatusCode !== 200) {
+      logger.error('Failed to write document to DynamoDB', {
+        documentId,
+        statusCode: result.$metadata.httpStatusCode,
+      });
       throw new Error('failed to write document to dynamodb');
     }
 
@@ -73,6 +81,10 @@ export class AppRepository {
     const response = await this.docClient.send(command);
 
     if (response.$metadata.httpStatusCode !== 200) {
+      logger.error('Failed to fetch document from DynamoDB', {
+        documentId,
+        statusCode: response.$metadata.httpStatusCode,
+      });
       throw new Error(`failed to fetch document: ${documentId}`);
     }
 
@@ -85,7 +97,7 @@ export class AppRepository {
       Key: {
         documentId: documentId,
       },
-      UpdateExpression: 'set #status = :status', // only need the # here because status is a reserved keyword for dynamodb
+      UpdateExpression: 'set #status = :status',
       ExpressionAttributeNames: {
         '#status': 'status',
       },
@@ -98,6 +110,11 @@ export class AppRepository {
     const response = await this.docClient.send(command);
 
     if (response.$metadata.httpStatusCode !== 200) {
+      logger.error('Failed to update document in DynamoDB', {
+        documentId,
+        newStatus: requestBody.status,
+        statusCode: response.$metadata.httpStatusCode,
+      });
       throw new Error(`Failed to update document: ${documentId}`);
     }
 
@@ -112,6 +129,10 @@ export class AppRepository {
 
     const response = await this.docClient.send(command);
     if (response.$metadata.httpStatusCode !== 200) {
+      logger.error('Failed to delete document in DynamoDB', {
+        documentId,
+        statusCode: response.$metadata.httpStatusCode,
+      });
       throw new Error(`Failed to delete: ${documentId}`);
     }
   }
@@ -126,7 +147,6 @@ export class AppRepository {
     items: DocumentData[];
     lastEvaluatedKey?: Record<string, any>;
   }> {
-    // Parse cursor - format: { lastCreatedAt: "ISO string", lastEvaluatedKeys: {...} }
     let cursor: {
       lastCreatedAt?: string;
       lastEvaluatedKeys?: Record<string, Record<string, any>>;
@@ -135,16 +155,17 @@ export class AppRepository {
       try {
         cursor = JSON.parse(lastEvaluatedKeyFromPreviousResponse);
       } catch (error) {
+        logger.error('Invalid lastEvaluatedKey format for all-status fetch', {
+          lastEvaluatedKeyFromPreviousResponse,
+          error,
+        });
         throw new Error('Invalid lastEvaluatedKey format');
       }
     }
 
-    // Fetch enough items per status to ensure we get a good mix across all statuses
-    // Fetch 10x the limit to have plenty of items from all statuses for global sorting
     const fetchLimit = this.DEFAULT_LIMIT * 10;
-
-    // Query all status values in parallel with descending order
     const allStatuses = Object.values(DocumentStatus);
+
     const queryPromises = allStatuses.map((statusValue) => {
       const exclusiveStartKey = cursor.lastEvaluatedKeys?.[statusValue];
       return this.docClient.send(
@@ -156,14 +177,13 @@ export class AppRepository {
           ExpressionAttributeValues: { ':status': statusValue },
           Limit: fetchLimit,
           ExclusiveStartKey: exclusiveStartKey,
-          ScanIndexForward: false, // Descending order (newest first)
+          ScanIndexForward: false,
         })
       );
     });
 
     const responses = await Promise.all(queryPromises);
 
-    // Combine all items and track last evaluated key for each status
     const allItems: DocumentData[] = [];
     const newLastEvaluatedKeys: Record<string, Record<string, any>> = {};
 
@@ -172,11 +192,14 @@ export class AppRepository {
       const statusValue = allStatuses[i];
 
       if (response.$metadata.httpStatusCode !== 200) {
+        logger.error('Failed to fetch documents by status from DynamoDB', {
+          status: statusValue,
+          statusCode: response.$metadata.httpStatusCode,
+        });
         throw new Error('Failed to fetch documents');
       }
 
       if (response.Items) {
-        // Filter out items we've already seen (if cursor exists)
         const filteredItems = cursor.lastCreatedAt
           ? response.Items.filter(
               (item) => (item.createdAt as string) < cursor.lastCreatedAt!
@@ -186,24 +209,19 @@ export class AppRepository {
         allItems.push(...(filteredItems as DocumentData[]));
       }
 
-      // Store pagination state for this status
       if (response.LastEvaluatedKey) {
         newLastEvaluatedKeys[statusValue] = response.LastEvaluatedKey;
       }
     }
 
-    // Sort all combined items by createdAt in descending order (newest first)
     const sortedItems = allItems.sort((a, b) => {
       const dateA = a.createdAt || '';
       const dateB = b.createdAt || '';
       return dateB > dateA ? 1 : dateB < dateA ? -1 : 0;
     });
 
-    // Take only the DEFAULT_LIMIT items after sorting
     const limitedItems = sortedItems.slice(0, this.DEFAULT_LIMIT);
 
-    // Create cursor for next page
-    // Use the last item's createdAt and all status pagination keys
     const lastItem = limitedItems[limitedItems.length - 1];
     const hasMoreItems =
       Object.keys(newLastEvaluatedKeys).length > 0 ||
@@ -234,6 +252,11 @@ export class AppRepository {
       try {
         exclusiveStartKey = JSON.parse(lastEvaluatedKeyFromPreviousResponse);
       } catch (error) {
+        logger.error('Invalid lastEvaluatedKey format for status fetch', {
+          status,
+          lastEvaluatedKeyFromPreviousResponse,
+          error,
+        });
         throw new Error('Invalid lastEvaluatedKey format');
       }
     }
@@ -256,6 +279,10 @@ export class AppRepository {
     const response = await this.docClient.send(command);
 
     if (response.$metadata.httpStatusCode !== 200) {
+      logger.error('Failed to fetch documents with status from DynamoDB', {
+        status,
+        statusCode: response.$metadata.httpStatusCode,
+      });
       throw new Error(`Failed to fetch documents with status: ${status}`);
     }
 
@@ -284,7 +311,11 @@ export class AppRepository {
         lastEvaluatedKeyFromPreviousResponse
       );
     } catch (error) {
-      console.error('Error fetching documents:', error);
+      logger.error('Error fetching documents from database', {
+        status,
+        lastEvaluatedKeyFromPreviousResponse,
+        error,
+      });
       throw new Error('Failed to fetch documents from database');
     }
   }
@@ -300,9 +331,13 @@ export class AppRepository {
 
     const result = await this.docClient.send(command);
     if (result.$metadata.httpStatusCode !== 200) {
+      logger.error('Failed to create admin user in DynamoDB', {
+        statusCode: result.$metadata.httpStatusCode,
+      });
       throw new Error('failed to created admin on dynamodb');
     }
   }
+
   async getAdminUser(): Promise<UsersData> {
     const command = new GetCommand({
       TableName: this.usersTable,
@@ -314,6 +349,9 @@ export class AppRepository {
     const response = await this.docClient.send(command);
 
     if (response.$metadata.httpStatusCode !== 200) {
+      logger.error('Failed to fetch admin user from DynamoDB', {
+        statusCode: response.$metadata.httpStatusCode,
+      });
       throw new Error(`Failed to fetch user: ${command}`);
     }
 

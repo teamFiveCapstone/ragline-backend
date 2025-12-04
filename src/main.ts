@@ -14,34 +14,59 @@ import multerS3 from 'multer-s3';
 import { S3Client } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import { authenticateMiddleware } from './middleware/authentication-middleware';
-
-//ZACH Added Type import for SSE
 import type { DocumentData } from './service/types';
 import { DocumentStatus } from './service/types';
+import logger from './logger';
 
-//ZACH ADDED Active SSE connections
 const sseClients: express.Response[] = [];
 
-// Cleanup job interval (starts on DELETE, stops when idle)
 let cleanupInterval: NodeJS.Timeout | null = null;
 
-//ZACH ADDED Function used to push updated document data to all connected clients
 function broadcastDocumentUpdate(document: DocumentData) {
-  //For debugging
-  console.log('Broadcasting SSE update to', sseClients.length, 'clients');
-  console.log(document);
+  logger.info('Broadcasting SSE document update', {
+    clientCount: sseClients.length,
+    documentId: document.documentId,
+    status: document.status,
+  });
 
   const data = `data: ${JSON.stringify(document)}\n\n`;
   sseClients.forEach((res) => res.write(data));
 }
 
 export const app = express();
-app.use(authenticateMiddleware);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use((req, res, next) => {
+  const requestId = randomUUID();
+  (req as any).requestId = requestId;
+
+  const start = Date.now();
+
+  logger.info('Incoming request', {
+    method: req.method,
+    url: req.originalUrl,
+  });
+
+  res.on('finish', () => {
+    const durationMs = Date.now() - start;
+
+    logger.info('Request completed', {
+      method: req.method,
+      url: req.originalUrl,
+      statusCode: res.statusCode,
+      durationMs,
+    });
+  });
+
+  next();
+});
+
+app.use(authenticateMiddleware);
+
 app.get('/api/events', (req, res) => {
-  console.log('SSE client connected');
+  logger.info('SSE client connected');
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -56,7 +81,8 @@ app.get('/api/events', (req, res) => {
   sseClients.push(res);
 
   req.on('close', () => {
-    console.log('SSE client disconnected');
+    logger.info('SSE client disconnected');
+
     clearInterval(heartbeat);
 
     const index = sseClients.indexOf(res);
@@ -71,7 +97,6 @@ const upload = multer({
     s3: s3Client,
     bucket: S3_BUCKET_NAME,
     key: (req, file, cb) => {
-      // Use documentId from req and preserve file extension
       const documentId = (req as any).documentId;
       const extension = file.originalname.split('.').pop();
       const keyWithExtension = extension
@@ -81,10 +106,8 @@ const upload = multer({
     },
     contentType: multerS3.AUTO_CONTENT_TYPE,
   }),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
-
-// TODO: Set up real logger (Winston or Pino)
 
 const appRepository = new AppRepository(
   AWS_REGION,
@@ -110,12 +133,14 @@ app.post('/api/login', async (req, res) => {
     const result = await appService.login(userName, password);
 
     if (!result) {
+      logger.info('Login failed: invalid credentials', { userName });
       return res.status(403).json({ error: 'Invalid credentials' });
     }
 
+    logger.info('Login successful', { userName });
     res.json({ jwt: result });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error', { error });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -128,7 +153,6 @@ app.get('/api/documents', async (req, res) => {
       ? req.query.status.toLowerCase()
       : STATUS;
 
-  // Get lastEvaluated from query param, or use undefined if not provided
   const lastEvaluatedKey =
     typeof req.query.lastEvaluatedKey === 'string'
       ? req.query.lastEvaluatedKey
@@ -139,9 +163,15 @@ app.get('/api/documents', async (req, res) => {
       status,
       lastEvaluatedKey
     );
+
+    logger.info('Fetched documents list', {
+      status,
+      hasMore: !!results.lastEvaluatedKey,
+    });
+
     res.json(results);
   } catch (error) {
-    console.error('Upload error:', error);
+    logger.error('Fetch documents error', { error, status });
     res.status(404).json({ error: 'Documents not found' });
   }
 });
@@ -151,31 +181,43 @@ app.get('/api/documents/:id', async (req, res) => {
 
   try {
     const result = await appService.fetchDocument(documentId);
+
+    if (!result) {
+      logger.info('Document not found', { documentId });
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    logger.info('Fetched document', { documentId });
     res.json(result);
   } catch (error) {
-    console.error('Upload error:', error);
+    logger.error('Fetch document error', { error, documentId });
     res.status(404).json({ error: 'Document not found' });
   }
 });
 
 app.post(
   '/api/documents',
-  // First: Generate documentId and attach to req
   (req, res, next) => {
     (req as any).documentId = randomUUID();
     next();
   },
-  // Second: Upload with custom key using documentId
   upload.single('file'),
-  // Third: Route handler
   async (req, res) => {
     try {
       const file = req.file;
-      const documentId = (req as any).documentId; // Use the pre-generated ID
+      const documentId = (req as any).documentId;
 
       if (!file) {
+        logger.info('Upload attempt with no file');
         return res.status(400).json({ error: 'No file uploaded' });
       }
+
+      logger.info('Uploading new document', {
+        documentId,
+        fileName: file.originalname,
+        size: file.size,
+        mimetype: file.mimetype,
+      });
 
       await appService.createDocument(
         {
@@ -190,7 +232,7 @@ app.post(
 
       res.status(201).json(result);
     } catch (error) {
-      console.error('Upload error:', error);
+      logger.error('Upload error', { error });
       res.status(500).json({ error: 'Upload failed' });
     }
   }
@@ -203,7 +245,8 @@ app.patch('/api/documents/:id', async (req, res) => {
   try {
     const result = await appService.updateDocument(documentId, requestBody);
 
-    //ZACH ADDED SSE Update
+    logger.info('Updated document', { documentId, status: result.status });
+
     broadcastDocumentUpdate(result);
 
     res.json(result);
@@ -211,7 +254,12 @@ app.patch('/api/documents/:id', async (req, res) => {
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error occurred';
 
-    console.error('Update error:', errorMessage);
+    logger.error('Update document error', {
+      documentId,
+      errorMessage,
+      rawError: error,
+    });
+
     res.status(500).json({ error: errorMessage });
   }
 });
@@ -222,34 +270,41 @@ app.delete('/api/documents/:id', async (req, res) => {
   try {
     const document = await appService.fetchDocument(documentId);
     if (!document) {
+      logger.info('Delete attempted on missing document', { documentId });
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    // Reject if still processing
     if (document.status === DocumentStatus.RUNNING) {
+      logger.info('Delete blocked: document still processing', {
+        documentId,
+      });
+
       return res.status(409).json({
         error: 'Cannot delete while processing. Wait for completion.',
       });
     }
 
-    // Delete S3 (triggers EventBridge → ingestion deletes embeddings)
     const s3Repo = new S3Repository(AWS_REGION, S3_BUCKET_NAME);
     await s3Repo.connect();
     const extension = document.fileName.split('.').pop();
     const s3Key = extension ? `${documentId}.${extension}` : documentId;
     await s3Repo.deleteDocument(s3Key);
 
-    // Set status to deleting
     const updatedDoc = await appService.updateDocument(documentId, {
+      status: DocumentStatus.DELETING,
+    });
+
+    logger.info('Delete initiated', {
+      documentId,
+      s3Key,
       status: DocumentStatus.DELETING,
     });
 
     broadcastDocumentUpdate(updatedDoc);
 
-    // Start cleanup job if not already running
     if (!cleanupInterval) {
-      cleanupInterval = setInterval(cleanupDeletedDocuments, 10000); // 10s
-      console.log('[Cleanup] Started (10s interval)');
+      cleanupInterval = setInterval(cleanupDeletedDocuments, 10000);
+      logger.info('[Cleanup] Started (10s interval)');
     }
 
     res.status(202).json({
@@ -259,49 +314,52 @@ app.delete('/api/documents/:id', async (req, res) => {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Delete error:', msg);
+    logger.error('Delete error', { documentId, error: msg, rawError: error });
     res.status(500).json({ error: msg });
   }
 });
 
-// Cleanup job: finalize deletion of status='deleted' documents
 async function cleanupDeletedDocuments() {
-  console.log('[Cleanup] Checking for documents to finalize...');
+  logger.info('[Cleanup] Checking for documents to finalize...');
   try {
     const deleted = await appService.fetchAllDocuments(DocumentStatus.DELETED);
     const deleting = await appService.fetchAllDocuments(
       DocumentStatus.DELETING
     );
 
-    console.log(
-      `[Cleanup] Found ${deleted.items.length} deleted, ${deleting.items.length} deleting`
-    );
+    logger.info('[Cleanup] Status', {
+      deletedCount: deleted.items.length,
+      deletingCount: deleting.items.length,
+    });
 
-    // Finalize 'deleted' documents (remove from DynamoDB)
     for (const doc of deleted.items) {
       try {
         await appService.finalizeDocumentDeletion(doc.documentId);
-        console.log(`[Cleanup] Finalized: ${doc.documentId}`);
+        logger.info('[Cleanup] Finalized document', {
+          documentId: doc.documentId,
+        });
       } catch (error) {
-        console.error(`[Cleanup] Failed to finalize ${doc.documentId}:`, error);
+        logger.error('[Cleanup] Failed to finalize document', {
+          documentId: doc.documentId,
+          error,
+        });
       }
     }
 
-    // Stop interval if no pending deletes
     if (deleted.items.length === 0 && deleting.items.length === 0) {
       if (cleanupInterval) {
         clearInterval(cleanupInterval);
         cleanupInterval = null;
-        console.log('[Cleanup] No pending deletes, stopping interval');
+        logger.info('[Cleanup] No pending deletes, stopping interval');
       }
     }
   } catch (error) {
-    console.error('[Cleanup] Error:', error);
+    logger.error('[Cleanup] Error while checking documents', { error });
   }
 }
 
 app.listen(PORT, async () => {
   await appRepository.connect();
   await appService.createAdminUser();
-  console.log('Listening to port 3000.');
+  logger.info('Management API listening', { port: PORT });
 });
