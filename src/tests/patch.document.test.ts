@@ -1,6 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import request from 'supertest';
 import { app, appService } from '../main.ts';
+import { INGESTION_API_TOKEN } from '../config/config.ts';
 
 beforeAll(async () => {
   await appService.createAdminUser();
@@ -14,6 +15,6 @@ test('changing status from pending to finished', async () => {
   const response = await request(app)
     .patch('/api/documents/18903458904')
     .send({status: "finished"})
-    .set('x-api-token', 'your-api-token');
+    .set('x-api-token', INGESTION_API_TOKEN);
   expect(response.body.status).toEqual("finished");
 });

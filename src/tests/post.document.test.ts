@@ -3,6 +3,7 @@ import { beforeAll, expect, test } from 'vitest';
 import request from 'supertest';
 import { app, appService } from '../main.ts';
 import { mockClient } from 'aws-sdk-client-mock';
+import { INGESTION_API_TOKEN } from '../config/config.ts';
 
 beforeAll(async () => {
   await appService.createAdminUser();
@@ -24,7 +25,7 @@ test('should upload a file succesfully', async () => {
   const { status, body } = await request(app)
     .post('/api/documents')
     .attach('file', mockFileBuffer, 'test-file.txt') // Field name, buffer, filename
-    .set('x-api-token', 'your-api-token');
+    .set('x-api-token', INGESTION_API_TOKEN);
   expect(status).toBe(201);
 
   const document = await appService.fetchDocument(body.documentId);

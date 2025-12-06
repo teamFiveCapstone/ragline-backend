@@ -1,6 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import request from 'supertest';
 import { app, appService } from '../main.ts';
+import { INGESTION_API_TOKEN } from '../config/config.ts';
 
 beforeAll(async () => {
   await appService.createAdminUser();
@@ -17,6 +18,6 @@ test('that getting specific document by id works', async () => {
   );
   const response = await request(app)
     .get('/api/documents/33kfgsljb')
-    .set('x-api-token', 'your-api-token');
+    .set('x-api-token', INGESTION_API_TOKEN);
   expect(response.body.fileName).toEqual("Tiger");
 });

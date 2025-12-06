@@ -2,6 +2,7 @@ import { beforeAll, expect, test } from 'vitest';
 import request from 'supertest';
 import { app, appService } from '../main.ts';
 import { DocumentData } from '../service/types.ts';
+import { INGESTION_API_TOKEN } from '../config/config.ts';
 
 beforeAll(async () => {
   await appService.createAdminUser();
@@ -18,7 +19,7 @@ test('that getting documents works', async () => {
   );
   const response = await request(app)
     .get('/api/documents')
-    .set('x-api-token', 'your-api-token');
+    .set('x-api-token', INGESTION_API_TOKEN);
 
   const newDocuments = response.body.items.filter((item: DocumentData) => {
     return item.documentId === '33kfgsljb' || item.documentId === '18903458904';
