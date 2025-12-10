@@ -182,6 +182,10 @@ app.use((req, res, next) => {
   next();
 });
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapiSpecification));
+app.get('/api/docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(openapiSpecification);
+});
 app.use(authenticateMiddleware);
 
 // Routes
